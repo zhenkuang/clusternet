@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
-	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -357,7 +356,7 @@ func (deployer *Deployer) populateBasesAndLocalizations(sub *appsapi.Subscriptio
 
 		baseTemplate := &appsapi.Base{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-%s", sub.Name, utilrand.String(known.DefaultRandomIDLength)),
+				Name:      stableBaseName(sub.Name, string(sub.UID), namespace),
 				Namespace: namespace,
 				Labels: map[string]string{
 					known.ObjectCreatedByLabel: known.ClusternetCtrlMgrName,
@@ -390,7 +389,7 @@ func (deployer *Deployer) populateBasesAndLocalizations(sub *appsapi.Subscriptio
 		// sync base object
 		if len(basesInCurrentNamespace) > 0 {
 			// backward compatible with legacy base name format
-			// reuse existing base object if found, otherwise create base with random uid as postfix
+			// reuse existing base object if found, otherwise create base with a stable hash postfix
 			sort.SliceStable(basesInCurrentNamespace, func(i, j int) bool {
 				return basesInCurrentNamespace[i].CreationTimestamp.Second() > basesInCurrentNamespace[j].
 					CreationTimestamp.Second()
@@ -462,9 +461,14 @@ func (deployer *Deployer) syncBase(sub *appsapi.Subscription, baseTemplate *apps
 	}
 
 	// update it
-	base, err = deployer.baseLister.Bases(baseTemplate.Namespace).Get(baseTemplate.Name)
+	base, err = getBaseForUpdate(context.TODO(), deployer.clusternetClient.AppsV1alpha1(), deployer.baseLister,
+		baseTemplate.Namespace, baseTemplate.Name)
 	if err != nil {
 		return nil, err
+	}
+
+	if owner, ok := base.Labels[known.ConfigSubscriptionUIDLabel]; !ok || owner != string(sub.UID) {
+		return nil, fmt.Errorf("Base %s already exists but does not belong to Subscription %s", klog.KObj(base), klog.KObj(sub))
 	}
 
 	if base.DeletionTimestamp != nil {
