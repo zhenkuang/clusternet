@@ -51,7 +51,7 @@ spec:
           operator: Exists
       containers:
         - name: clusternet-agent
-          image: ghcr.io/clusternet/clusternet-agent:v0.18.0
+          image: ghcr.io/clusternet/clusternet-agent:v1.0.0
           imagePullPolicy: IfNotPresent
           env:
             - name: PARENT_URL
@@ -69,7 +69,7 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
             # Set the CLUSTER_CIDR and SERVICE_CIDR when deploy agent with k8s control-plane not running as static pod
-            # for example，k3s and rke  
+            # for example，k3s and rke
             # - name: CLUSTER_CIDR
             #   value: 10.233.12.0/18
             # - name: SERVICE_CIDR
